@@ -13,11 +13,20 @@ export default function Home() {
   function choose(file?: File) { if (!file?.type.startsWith('image/')) return setError('Please choose an image file.'); setImage(file); setPreview(URL.createObjectURL(file)); setError(''); setVideoUrl(''); }
   function onInput(e: ChangeEvent<HTMLInputElement>) { choose(e.target.files?.[0]); }
   function onDrop(e: DragEvent<HTMLLabelElement>) { e.preventDefault(); choose(e.dataTransfer.files[0]); }
+  async function imageDataUrl(file: File) {
+    if (file.size <= 2 * 1024 * 1024) {
+      return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = () => reject(new Error('Could not read the image.')); reader.readAsDataURL(file); });
+    }
+    const source = await new Promise<HTMLImageElement>((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('Could not load the image.')); image.src = URL.createObjectURL(file); });
+    const scale = Math.min(1, 1280 / source.width, 720 / source.height);
+    const canvas = document.createElement('canvas'); canvas.width = Math.round(source.width * scale); canvas.height = Math.round(source.height * scale);
+    canvas.getContext('2d')?.drawImage(source, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  }
   async function generate() {
     if (!image || !prompt.trim()) return setError('Add an image and a prompt to continue.');
     setLoading(true); setError(''); setVideoUrl('');
-    const imageData = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = () => reject(new Error('Could not read the image.')); reader.readAsDataURL(image); });
-    try { const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: imageData, prompt: prompt.trim() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
+    try { const imageData = await imageDataUrl(image); const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: imageData, prompt: prompt.trim() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
     catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.'); } finally { setLoading(false); }
   }
   return <main className="mx-auto min-h-screen max-w-5xl px-6 py-12 md:py-20">
