@@ -14,15 +14,19 @@ export async function POST(req: Request) {
     }
 
     const token = process.env.REPLICATE_API_TOKEN;
-    const res = await fetch("https://api.replicate.com/v1/predictions", {
+    const res = await fetch("https://api.replicate.com/v1/models/minimax/video-01/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${token}`,
         "Content-Type": "application/json",
+        "Prefer": "wait",
       },
       body: JSON.stringify({
-        version: "c6a580780af9a99a1a412b7d1e9defc0f7eaf7d10f0e4e0e6b9ff5a7956b960",
-        input: { prompt, first_frame_image: image, prompt_optimizer: true },
+        input: {
+          prompt,
+          first_frame_image: image,
+          prompt_optimizer: true,
+        },
       }),
     });
 
