@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const imageUrl = `data:${image.type};base64,${imageBytes}`;
     const motionPrompt = prompt.trim();
     // replicate.run waits for the prediction to finish before returning its output.
-    const output = await replicate.run('kwaivgi/kling-v2.1-master', {
+    const output = await replicate.run('zsxkib/cogvideox-5b', {
       input: {
         image: imageUrl,
         prompt: motionPrompt,
@@ -51,5 +51,13 @@ export async function POST(request: Request) {
       : (videoOutput as { url?: () => string }).url?.();
     if (!videoUrl) throw new Error('Replicate returned no video URL.');
     return NextResponse.json({ videoUrl });
-  } catch (error) { console.error('Video generation failed:', error); return NextResponse.json({ error: error instanceof Error ? error.message : 'Video generation failed.' }, { status: 500 }); }
+  } catch (error) {
+    console.error('Video generation failed:', error);
+    const replicateError = error as { status?: number; response?: { status?: number } };
+    const status = replicateError.status ?? replicateError.response?.status;
+    if (status === 402 || (error instanceof Error && /\b402\b|insufficient credit/i.test(error.message))) {
+      return NextResponse.json({ error: 'No Replicate credit, please add $5 at replicate.com/account/billing' }, { status: 402 });
+    }
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Video generation failed.' }, { status: 500 });
+  }
 }
