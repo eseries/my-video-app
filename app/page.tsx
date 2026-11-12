@@ -3,36 +3,44 @@
 import { ChangeEvent, DragEvent, useState } from 'react';
 
 const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxW = 1024;
-      const scale = Math.min(1, maxW / img.width);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      const MAX = 768;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = (h * MAX) / w; w = MAX; }
+      if (h > MAX) { w = (w * MAX) / h; h = MAX; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
     };
-    img.src = URL.createObjectURL(file);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 };
 
 export default function Home() {
-  const [image, setImage] = useState<File | null>(null);
+  const [image, setImage] = useState('');
   const [preview, setPreview] = useState('');
   const [prompt, setPrompt] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  function choose(file?: File) { if (!file?.type.startsWith('image/')) return setError('Please choose an image file.'); setImage(file); setPreview(URL.createObjectURL(file)); setError(''); setVideoUrl(''); }
-  function onInput(e: ChangeEvent<HTMLInputElement>) { choose(e.target.files?.[0]); }
-  function onDrop(e: DragEvent<HTMLLabelElement>) { e.preventDefault(); choose(e.dataTransfer.files[0]); }
+  async function choose(file?: File) { if (!file?.type.startsWith('image/')) return setError('Please choose an image file.'); const compressed = await compressImage(file); setImage(compressed); setPreview(compressed); setError(''); setVideoUrl(''); }
+  async function onInput(e: ChangeEvent<HTMLInputElement>) { await choose(e.target.files?.[0]); }
+  async function onDrop(e: DragEvent<HTMLLabelElement>) { e.preventDefault(); await choose(e.dataTransfer.files[0]); }
   async function generate() {
     if (!image || !prompt.trim()) return setError('Add an image and a prompt to continue.');
     setLoading(true); setError(''); setVideoUrl('');
-    try { const compressed = await compressImage(image); const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: compressed, prompt: prompt.trim() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
+    try { const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, prompt: prompt.trim() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
     catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.'); } finally { setLoading(false); }
   }
   return <main className="mx-auto min-h-screen max-w-5xl px-6 py-12 md:py-20">
