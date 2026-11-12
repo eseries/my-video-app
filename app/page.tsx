@@ -5,9 +5,10 @@ import { ChangeEvent, DragEvent, useState } from 'react';
 export default function Home() {
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
-  const [prompt, setPrompt] = useState('A gentle cinematic camera movement, natural motion, soft light');
+  const [prompt, setPrompt] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState('');
 
   function choose(file?: File) { if (!file?.type.startsWith('image/')) return setError('Please choose an image file.'); setImage(file); setPreview(URL.createObjectURL(file)); setError(''); setVideoUrl(''); }
@@ -20,6 +21,11 @@ export default function Home() {
     try { const response = await fetch('/api/generate', { method: 'POST', body }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
     catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.'); } finally { setLoading(false); }
   }
+  async function enhance() {
+    setEnhancing(true); setError('');
+    try { const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'enhance', videoUrl }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Enhancement failed.'); setVideoUrl(data.videoUrl); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.'); } finally { setEnhancing(false); }
+  }
   return <main className="mx-auto min-h-screen max-w-5xl px-6 py-12 md:py-20">
     <div className="mb-12 flex items-end justify-between"><div><p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-orange-600">My Video App</p><h1 className="text-5xl font-semibold tracking-tight md:text-7xl">Give a still<br />some motion.</h1></div><span className="hidden text-sm text-neutral-500 md:block">Image → video</span></div>
     <section className="grid gap-6 md:grid-cols-[1.1fr_.9fr]">
@@ -27,9 +33,9 @@ export default function Home() {
         {preview ? <img src={preview} alt="Selected source" className="max-h-[300px] rounded-2xl object-contain" /> : <><div className="mb-4 text-5xl">＋</div><p className="font-medium">Drop an image here</p><p className="mt-2 text-sm text-neutral-500">or click to browse · PNG, JPG, WEBP</p></>}
         <input type="file" accept="image/*" onChange={onInput} className="hidden" />
       </label>
-      <div className="flex flex-col rounded-3xl bg-neutral-900 p-7 text-white"><label htmlFor="prompt" className="mb-3 text-sm text-neutral-400">Describe the motion</label><textarea id="prompt" value={prompt} onChange={e => setPrompt(e.target.value)} rows={7} className="resize-none rounded-2xl border border-neutral-700 bg-neutral-800 p-4 text-sm outline-none ring-orange-500 focus:ring-2" /><button onClick={generate} disabled={loading} className="mt-auto rounded-full bg-orange-500 px-6 py-4 font-semibold text-neutral-950 transition hover:bg-orange-400 disabled:cursor-wait disabled:opacity-60">{loading ? 'Creating your video…' : 'Generate video →'}</button>{error && <p className="mt-4 text-sm text-red-300">{error}</p>}</div>
+      <div className="flex flex-col rounded-3xl bg-neutral-900 p-7 text-white"><label htmlFor="prompt" className="mb-3 text-sm text-neutral-400">Describe the motion</label><textarea id="prompt" placeholder="e.g. Cinematic 35mm film, slow push-in, subtle head movement, natural lighting, speaks calmly..." value={prompt} onChange={e => setPrompt(e.target.value)} rows={7} className="resize-none rounded-2xl border border-neutral-700 bg-neutral-800 p-4 text-sm outline-none ring-orange-500 focus:ring-2" /><button onClick={generate} disabled={loading} className="mt-auto rounded-full bg-orange-500 px-6 py-4 font-semibold text-neutral-950 transition hover:bg-orange-400 disabled:cursor-wait disabled:opacity-60">{loading ? 'Creating your video…' : 'Generate video →'}</button>{error && <p className="mt-4 text-sm text-red-300">{error}</p>}</div>
     </section>
-    {videoUrl && <section className="mt-8 rounded-3xl bg-white p-5"><video controls autoPlay loop src={videoUrl} className="w-full rounded-2xl" /></section>}
+    {videoUrl && <section className="mt-8 rounded-3xl bg-white p-5"><video controls autoPlay loop src={videoUrl} className="w-full rounded-2xl" /><button onClick={enhance} disabled={enhancing} className="mt-4 rounded-full bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-neutral-700 disabled:cursor-wait disabled:opacity-60">{enhancing ? 'Enhancing…' : 'Enhance to 4K cinematic →'}</button></section>}
     <p className="mt-10 text-xs text-neutral-500">Powered by an open image-to-video workflow.</p>
   </main>;
 }

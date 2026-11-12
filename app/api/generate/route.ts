@@ -6,6 +6,24 @@ export async function POST(request: Request) {
   try {
     const token = process.env.REPLICATE_API_TOKEN;
     if (!token) return NextResponse.json({ error: 'REPLICATE_API_TOKEN is not configured.' }, { status: 500 });
+    const replicate = new Replicate({ auth: token });
+
+    if (request.headers.get('content-type')?.includes('application/json')) {
+      const { action, videoUrl } = await request.json();
+      if (action !== 'enhance' || typeof videoUrl !== 'string' || !videoUrl) {
+        return NextResponse.json({ error: 'A video URL is required.' }, { status: 400 });
+      }
+      const output = await replicate.run('nightmareai/real-esrgan', {
+        input: { image: videoUrl, scale: 4, face_enhance: true },
+      });
+      const enhancedOutput = Array.isArray(output) ? output[0] : output;
+      const enhancedUrl = typeof enhancedOutput === 'string'
+        ? enhancedOutput
+        : (enhancedOutput as { url?: () => string }).url?.();
+      if (!enhancedUrl) throw new Error('Replicate returned no enhanced media URL.');
+      return NextResponse.json({ videoUrl: enhancedUrl });
+    }
+
     const form = await request.formData();
     const image = form.get('image');
     const prompt = form.get('prompt');
@@ -15,11 +33,17 @@ export async function POST(request: Request) {
     const imageBytes = Buffer.from(await image.arrayBuffer()).toString('base64');
     const imageUrl = `data:${image.type};base64,${imageBytes}`;
     const motionPrompt = prompt.trim();
-    const replicate = new Replicate({ auth: token });
-
     // replicate.run waits for the prediction to finish before returning its output.
-    const output = await replicate.run('minimax/video-01', {
-      input: { prompt: motionPrompt, first_frame_image: imageUrl },
+    const output = await replicate.run('kwaivgi/kling-v2.1-master', {
+      input: {
+        image: imageUrl,
+        prompt: motionPrompt,
+        duration: 5,
+        aspect_ratio: 'auto',
+        cfg_scale: 0.5,
+        enhance_prompt: true,
+        negative_prompt: 'blurry, distorted, cartoon, low quality, warp, morph',
+      },
     });
     const videoOutput = Array.isArray(output) ? output[0] : output;
     const videoUrl = typeof videoOutput === 'string'
