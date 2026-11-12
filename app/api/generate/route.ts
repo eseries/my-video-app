@@ -1,4 +1,3 @@
-import Replicate from "replicate";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -6,16 +5,49 @@ export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    const { image, prompt } = await req.json();
-    if (!image) return NextResponse.json({ error: "No image" }, { status: 400 });
-    const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
-    const output: any = await replicate.run("minimax/video-01", {
-      input: { prompt: prompt || "cinematic slow push-in, subtle movement", first_frame_image: image, prompt_optimizer: true },
+    const body = await req.json();
+    const { image, prompt } = body;
+    console.log("Received prompt:", prompt?.slice(0, 50));
+
+    if (!process.env.REPLICATE_API_TOKEN) {
+      return NextResponse.json({ error: "Missing REPLICATE_API_TOKEN in Vercel env" }, { status: 500 });
+    }
+
+    const token = process.env.REPLICATE_API_TOKEN;
+    const res = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Token ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        version: "c6a580780af9a99a1a412b7d1e9defc0f7eaf7d10f0e4e0e6b9ff5a7956b960",
+        input: { prompt, first_frame_image: image, prompt_optimizer: true },
+      }),
     });
-    const videoUrl = typeof output === "string" ? output : output[0] || output.video;
+
+    const data = await res.json();
+    if (!res.ok) {
+      return NextResponse.json({ error: data.detail || JSON.stringify(data) }, { status: res.status });
+    }
+
+    let prediction = data;
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { "Authorization": `Token ${token}` },
+      });
+      prediction = await poll.json();
+    }
+
+    if (prediction.status === "failed") {
+      return NextResponse.json({ error: prediction.error }, { status: 500 });
+    }
+
+    const videoUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     return NextResponse.json({ videoUrl });
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (e: any) {
+    console.error("CRITICAL ERROR:", e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }

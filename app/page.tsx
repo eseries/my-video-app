@@ -40,7 +40,7 @@ export default function Home() {
   async function generate() {
     if (!image || !prompt.trim()) return setError('Add an image and a prompt to continue.');
     setLoading(true); setError(''); setVideoUrl('');
-    try { const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, prompt: prompt.trim() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
+    try { const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, prompt: prompt.trim() }) }); const text = await response.text(); let data; try { data = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); } if (!response.ok) throw new Error(data.error || 'Generation failed.'); setVideoUrl(data.videoUrl); }
     catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.'); } finally { setLoading(false); }
   }
   return <main className="mx-auto min-h-screen max-w-5xl px-6 py-12 md:py-20">
