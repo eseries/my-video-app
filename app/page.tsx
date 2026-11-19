@@ -1,73 +1,12 @@
 'use client';
+import { ChangeEvent, DragEvent, useMemo, useState } from 'react';
 
-import { ChangeEvent, DragEvent, useState } from 'react';
-
-const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new window.Image();
-      img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const MAX = 768;
-      let w = img.width, h = img.height;
-      if (w > MAX) { h = (h * MAX) / w; w = MAX; }
-      if (h > MAX) { w = (w * MAX) / h; h = MAX; }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.6));
-      };
-      img.onerror = reject;
-      img.src = reader.result as string;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-};
+const compressImage = (file: File): Promise<string> => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => { const img = new window.Image(); img.onload = () => { const max = 768, scale = Math.min(1, max / img.width, max / img.height), canvas = document.createElement('canvas'); canvas.width = img.width * scale; canvas.height = img.height * scale; canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', .6)); }; img.onerror = reject; img.src = reader.result as string; }; reader.onerror = reject; reader.readAsDataURL(file); });
 
 export default function Home() {
-  const [image, setImage] = useState('');
-  const [preview, setPreview] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState('');
-
-  async function choose(file?: File) { if (!file?.type.startsWith('image/')) return setError('Please choose an image file.'); const compressed = await compressImage(file); setImage(compressed); setPreview(compressed); setError(''); setVideoUrl(''); }
-  async function onInput(e: ChangeEvent<HTMLInputElement>) { await choose(e.target.files?.[0]); }
-  async function onDrop(e: DragEvent<HTMLLabelElement>) { e.preventDefault(); await choose(e.dataTransfer.files[0]); }
-  async function generate() {
-    if (!image || !prompt.trim()) return setError('Add an image and a prompt to continue.');
-    setLoading(true); setProgress(10); setError(''); setVideoUrl('');
-    try {
-      const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, prompt: prompt.trim() }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Generation failed.');
-      const { id } = data;
-      let done = false;
-      while (!done) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        const statusResponse = await fetch('/api/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-        const status = await statusResponse.json();
-        if (!statusResponse.ok && status.status !== 'failed') throw new Error(status.error || 'Status check failed.');
-        if (status.status === 'succeeded') { setVideoUrl(status.videoUrl); setProgress(100); done = true; }
-        else if (status.status === 'failed') throw new Error(status.error || 'Generation failed.');
-        else setProgress(status.status === 'processing' ? 50 : 10);
-      }
-    } catch (err) { setError(err instanceof Error ? err.message : 'Something went wrong.'); } finally { setLoading(false); }
-  }
-  return <main className="mx-auto min-h-screen max-w-5xl px-6 py-12 md:py-20">
-    <div className="mb-12 flex items-end justify-between"><div><p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-orange-600">My Video App</p><h1 className="text-5xl font-semibold tracking-tight md:text-7xl">Give a still<br />some motion.</h1></div><span className="hidden text-sm text-neutral-500 md:block">Image → video</span></div>
-    <section className="grid gap-6 md:grid-cols-[1.1fr_.9fr]">
-      <label onDragOver={e => e.preventDefault()} onDrop={onDrop} className="group flex min-h-[360px] cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-neutral-300 bg-white p-8 text-center transition hover:border-orange-400">
-        {preview ? <img src={preview} alt="Selected source" className="max-h-[300px] rounded-2xl object-contain" /> : <><div className="mb-4 text-5xl">＋</div><p className="font-medium">Drop an image here</p><p className="mt-2 text-sm text-neutral-500">or click to browse · PNG, JPG, WEBP</p></>}
-        <input type="file" accept="image/*" onChange={onInput} className="hidden" />
-      </label>
-      <div className="flex flex-col rounded-3xl bg-neutral-900 p-7 text-white"><label htmlFor="prompt" className="mb-3 text-sm text-neutral-400">Describe the motion</label><textarea id="prompt" placeholder="e.g. Cinematic 35mm film, slow push-in, subtle head movement, natural lighting, speaks calmly..." value={prompt} onChange={e => setPrompt(e.target.value)} rows={7} className="resize-none rounded-2xl border border-neutral-700 bg-neutral-800 p-4 text-sm outline-none ring-orange-500 focus:ring-2" /><button onClick={generate} disabled={loading} className="mt-auto rounded-full bg-orange-500 px-6 py-4 font-semibold text-neutral-950 transition hover:bg-orange-400 disabled:cursor-wait disabled:opacity-60">{loading ? `Generating... ${progress}%` : 'Generate video →'}</button>{error && <p className="mt-4 text-sm text-red-300">{error.startsWith('INSUFFICIENT_CREDIT:') ? 'Out of free credit. Add $5 at replicate.com/account/billing - this gives you ~20 videos' : error}</p>}</div>
-    </section>
-    {videoUrl && <section className="mt-8 rounded-3xl bg-white p-5"><video controls autoPlay loop src={videoUrl} className="w-full rounded-2xl" /></section>}
-    <p className="mt-10 text-xs text-neutral-500">Powered by an open image-to-video workflow.</p>
-  </main>;
+  const [script, setScript] = useState(''); const [image, setImage] = useState(''); const [preview, setPreview] = useState(''); const [videoUrl, setVideoUrl] = useState(''); const [loading, setLoading] = useState(false); const [progress, setProgress] = useState(0); const [error, setError] = useState(''); const [aspectRatio, setAspectRatio] = useState('16:9'); const [duration, setDuration] = useState('5'); const [audio, setAudio] = useState(true);
+  const scenes = useMemo(() => script.split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 6), [script]);
+  async function choose(file?: File) { if (!file?.type.startsWith('image/')) return setError('Please choose an image file.'); const x = await compressImage(file); setImage(x); setPreview(x); setError(''); }
+  async function generate() { if (!script.trim()) return setError('Paste a script to continue.'); setLoading(true); setProgress(10); setError(''); setVideoUrl(''); try { const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ script, image, aspectRatio, duration, audio }) }); const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Generation failed.'); let done = false; while (!done) { await new Promise(x => setTimeout(x, 3000)); const sR = await fetch('/api/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: data.id }) }); const s = await sR.json(); if (s.status === 'succeeded') { setVideoUrl(s.videoUrl); setProgress(100); done = true; } else if (s.status === 'failed') throw new Error(s.error || 'Generation failed.'); else setProgress(s.status === 'processing' ? 50 : 20); } } catch (e) { setError(e instanceof Error ? e.message : 'Something went wrong.'); } finally { setLoading(false); } }
+  return <main className="mx-auto min-h-screen max-w-6xl px-6 py-10 md:py-16"><header className="mb-10 flex items-end justify-between"><div><p className="mb-3 text-sm font-semibold uppercase tracking-[.25em] text-orange-600">My Video App</p><h1 className="text-5xl font-semibold tracking-tight md:text-7xl">Script to<br />storyboard.</h1></div><span className="hidden text-sm text-neutral-500 md:block">AI video studio</span></header><section className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div className="rounded-3xl bg-neutral-900 p-7 text-white"><div className="mb-5 flex items-center justify-between"><label htmlFor="script" className="text-sm text-neutral-400">Your script</label><span className="text-xs text-neutral-500">{script.length}/2,000</span></div><textarea id="script" maxLength={2000} value={script} onChange={e => setScript(e.target.value)} rows={13} placeholder={'Paste your script here...\n\nExample:\nA woman steps onto an empty train platform at dawn. The camera slowly pushes in.\nShe hears a distant whistle and turns toward the light.'} className="w-full resize-none rounded-2xl border border-neutral-700 bg-neutral-800 p-5 text-sm leading-6 outline-none focus:ring-2 focus:ring-orange-500" /><div className="mt-5 grid grid-cols-3 gap-3"><select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)} className="rounded-xl border border-neutral-700 bg-neutral-800 p-3 text-sm"><option>16:9</option><option>9:16</option><option>1:1</option></select><select value={duration} onChange={e => setDuration(e.target.value)} className="rounded-xl border border-neutral-700 bg-neutral-800 p-3 text-sm"><option value="5">5 sec</option><option value="10">10 sec</option><option value="15">15 sec</option></select><button onClick={() => setAudio(!audio)} className="rounded-xl border border-neutral-700 p-3 text-sm">{audio ? 'Audio on' : 'Audio off'}</button></div><button onClick={generate} disabled={loading} className="mt-5 w-full rounded-full bg-orange-500 px-6 py-4 font-semibold text-neutral-950 hover:bg-orange-400 disabled:opacity-60">{loading ? `Generating... ${progress}%` : 'Generate storyboard →'}</button>{error && <p className="mt-4 text-sm text-red-300">{error}</p>}</div><div><div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">Shot plan</h2><span className="text-xs text-neutral-500">{scenes.length || 0} shots detected</span></div><div className="space-y-3">{(scenes.length ? scenes : ['Your script becomes a shot-by-shot plan here.']).map((scene, i) => <div key={i} className="rounded-2xl border border-neutral-200 bg-white p-4"><div className="mb-2 flex justify-between text-xs font-semibold uppercase tracking-wider text-orange-600"><span>Shot {String(i + 1).padStart(2, '0')}</span><span className="text-neutral-400">{duration}s · {aspectRatio}</span></div><p className="text-sm leading-6 text-neutral-700">{scene}</p><p className="mt-2 text-xs text-neutral-400">Auto-directed · cinematic coverage</p></div>)}</div><label onDragOver={e => e.preventDefault()} onDrop={async (e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); await choose(e.dataTransfer.files[0]); }} className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-neutral-300 bg-white p-4 text-sm text-neutral-500 hover:border-orange-400">{preview ? <img src={preview} className="h-12 w-16 rounded-lg object-cover" alt="Reference" /> : <span className="text-xl">＋</span>}<span>{preview ? 'Reference image added' : 'Optional reference image for character/style consistency'}</span><input type="file" accept="image/*" onChange={async (e: ChangeEvent<HTMLInputElement>) => choose(e.target.files?.[0])} className="hidden" /></label></div></section>{videoUrl && <section className="mt-8 rounded-3xl bg-white p-5"><video controls autoPlay loop src={videoUrl} className="w-full rounded-2xl" /></section>}<p className="mt-10 text-xs text-neutral-500">Built around script breakdown, shot direction, and optional continuity references.</p></main>;
 }

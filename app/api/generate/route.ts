@@ -4,7 +4,9 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { image, prompt } = await req.json();
+    const { image, prompt, script, aspectRatio, duration, audio } = await req.json();
+    const creativeBrief = script?.trim() || prompt?.trim();
+    if (!creativeBrief) return NextResponse.json({ error: "Add a script or prompt." }, { status: 400 });
     const res = await fetch("https://api.replicate.com/v1/models/minimax/video-01/predictions", {
       method: "POST",
       headers: {
@@ -13,8 +15,8 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         input: {
-          prompt,
-          first_frame_image: image,
+          prompt: `${creativeBrief}\n\nCreate a coherent short film with clear shot changes, intentional camera movement, consistent characters, and a ${aspectRatio || "16:9"} composition. Target duration: ${duration || "5"} seconds. ${audio ? "Include natural dialogue and ambient sound where appropriate." : "Do not rely on generated audio."}`,
+          ...(image ? { first_frame_image: image } : {}),
           prompt_optimizer: true,
         },
       }),
